@@ -7,6 +7,9 @@ repositories {
             username = findProperty('bivaUser') ?: System.getenv('BIVA_NEXUS_USER') ?: ''
             password = findProperty('bivaPassword') ?: System.getenv('BIVA_NEXUS_PASSWORD') ?: ''
         }
+        authentication {
+            basic(BasicAuthentication)
+        }
     }
     mavenCentral()
 }
