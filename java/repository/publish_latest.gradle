@@ -10,8 +10,8 @@ publishing {
             url = findProperty('bivaLibsPublishUrl') ?: System.getenv('BIVA_LIBS_PUBLISH_URL') ?: ''
             allowInsecureProtocol = true
             credentials(HttpHeaderCredentials) {
-                def user = findProperty('bivaUser') ?: System.getenv('BIVA_NEXUS_USER') ?: ''
-                def pass = findProperty('bivaPassword') ?: System.getenv('BIVA_NEXUS_PASSWORD') ?: ''
+                def user = System.getenv('BIVA_NEXUS_PUBLISHER_USER') ?: ''
+                def pass = System.getenv('BIVA_NEXUS_PUBLISHER_PASSWORD') ?: ''
                 name = "Authorization"
                 value = "Basic " + "${user}:${pass}".bytes.encodeBase64().toString()
             }
