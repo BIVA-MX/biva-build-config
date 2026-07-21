@@ -1,0 +1,60 @@
+jar {
+    manifest {
+        attributes "Implementation-Title": project.name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor-Id': project.group,
+                'Implementation-Vendor': 'BIVA'
+    }
+}
+
+compileJava { options.encoding = 'UTF-8' }
+compileTestJava { options.encoding = 'UTF-8' }
+javadoc { options.encoding = 'UTF-8' }
+
+testing {
+    suites {
+        test {
+            useJUnitJupiter()
+            testType = TestSuiteType.UNIT_TEST
+        }
+        integrationTest(JvmTestSuite) {
+            testType = TestSuiteType.INTEGRATION_TEST
+            dependencies {
+                implementation project()
+            }
+            targets {
+                all {
+                    testTask.configure {
+                        shouldRunAfter(test)
+                    }
+                }
+            }
+        }
+    }
+}
+
+cyclonedxBom {
+    includeConfigs = ["runtimeClasspath"]
+}
+
+pmd {
+    consoleOutput = false
+    toolVersion = "7.0.0-rc4"
+}
+
+javadoc {
+    failOnError = false
+}
+
+sonarqube {
+    properties {
+        property "sonar.projectKey", findProperty('sonar.projectKey')
+            ?: System.getenv('SONAR_PROJECT_KEY')
+            ?: "$System.env.GITHUB_REPOSITORY_OWNER" + "_" + "$System.env.GITHUB_REPOSITORY".tokenize('/').last()
+        property "sonar.organization", findProperty('sonar.organization')
+            ?: System.getenv('SONAR_ORGANIZATION')
+            ?: "biva-mx"
+        property "sonar.gradle.skipCompile", "true"
+        property "sonar.qualitygate.wait", "true"
+    }
+}

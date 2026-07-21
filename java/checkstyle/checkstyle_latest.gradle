@@ -1,0 +1,6 @@
+checkstyle {
+    sourceSets = [project.sourceSets.main]
+    config = resources.text.fromUri("https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/java/checkstyle/biva-checkstyle.xml")
+    toolVersion '10.12.4'
+    maxWarnings = 0
+}

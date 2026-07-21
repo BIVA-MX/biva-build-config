@@ -1,0 +1,54 @@
+jacocoTestReport {
+    executionData integrationTest
+    reports {
+        xml.required = true
+    }
+    afterEvaluate {
+        classDirectories = files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExclusions)
+        })
+    }
+    dependsOn test, integrationTest
+}
+
+jacocoTestCoverageVerification {
+    executionData integrationTest
+    afterEvaluate {
+        classDirectories = files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExclusions)
+        })
+    }
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80
+            }
+        }
+        rule {
+            limit {
+                counter = 'INSTRUCTION'
+                minimum = jacocoInstructionPercent
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = jacocoBranchPercent
+            }
+            limit {
+                counter = 'LINE'
+                minimum = jacocoLinePercent
+            }
+            limit {
+                counter = 'COMPLEXITY'
+                minimum = jacocoComplexityPercent
+            }
+            limit {
+                counter = 'METHOD'
+                minimum = jacocoMethodPercent
+            }
+            limit {
+                counter = 'CLASS'
+                minimum = jacocoClassPercent
+            }
+        }
+    }
+}

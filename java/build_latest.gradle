@@ -1,0 +1,4 @@
+apply from: "https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/java/general/general_latest.gradle"
+apply from: "https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/java/jacoco/jacoco_latest.gradle"
+apply from: "https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/java/repository/read-repo.gradle"
+apply from: "https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/java/checkstyle/checkstyle_latest.gradle"
