@@ -1,0 +1,150 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
+def getSystemProperty(propertyName, elseValue ) {
+    String propStr = System.getProperty(propertyName)
+    if( propStr != null  ){
+        return propStr
+    }
+    return elseValue
+}
+
+def loadConfiguration() {
+  def profileName = getSystemProperty("app", "app")
+  def configFileName = "$profileName"
+  try {
+    def configFile = file('config/' + "$configFileName" + '.groovy')
+    def config = new ConfigSlurper("conf").parse(configFile.toURI().toURL())
+    System.properties.put('config', config)
+    return config
+  } catch (Exception e) {def configFile = file('config' + "$configFileName" + '.groovy')
+    throw new InvalidUserDataException("No se ha encontrado las propiedades para la configuracion del proyecto", e)
+  }
+  
+}
+
+processResources {
+  def conf = loadConfiguration()
+  if (conf != null) {
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    def mainClass = properties.get("conf.app.mainClass")
+    project.ext.set('mainClass', mainClass)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+        filesMatching(["**/*.yml", "**/*.yaml", "**/bin/*.sh", "**/launcher/launcher.sh"]) {
+        filter(ReplaceTokens, tokens: properties)
+    }
+  } else {
+    throw new InvalidUserDataException("No se ha encontrado las propiedades para la configuracion del proyecto")
+  }
+}
+
+def downloadBaseLauncher() {
+    download.run {
+        src([
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/checkLog.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/cleanLogs.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/setEnv.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/shutdown.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/start.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/bin/status.sh'
+        ])
+        dest "${buildDir}/resources/main/bin"
+    }
+    copyLauncherBase.copy()
+}
+
+def downloadLauncher() {
+    download.run {
+        src 'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/project/scripts/launcher/launcher.sh'
+        dest "${buildDir}/resources/main/launcher/launcher.sh"
+    }
+    copyLaunchers.copy()
+}
+
+task copyLauncherBase(type:Copy) {
+    from "${buildDir}/resources/main/bin"
+    into "${buildDir}/deploy/${version}/bin"
+    if (GradleVersion.current() >= GradleVersion.version("8.3")) {
+      filePermissions { unix(0755) }
+    } else {
+      fileMode = 0755
+    }
+    fileMode = 0755
+    def conf = loadConfiguration()
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+    filter(ReplaceTokens, tokens: properties)
+}
+
+task copyLaunchers(type:Copy) {
+    from "${buildDir}/resources/main/launcher"
+    into "${buildDir}/deploy"
+    if (GradleVersion.current() >= GradleVersion.version("8.3")) {
+      filePermissions { unix(0755) }
+    } else {
+      fileMode = 0755
+    }
+    def conf = loadConfiguration()
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+    filter(ReplaceTokens, tokens: properties)
+}
+
+task explodeJar(type: Copy) {
+    def jarFile = file("${buildDir}/libs/${archivesBaseName}-${version}.jar")
+    def outputDir = file("${buildDir}/deploy/${version}/dist")
+
+    from jarFile
+    into outputDir
+    exclude "/BOOT-INF/classes/bin/", "/BOOT-INF/classes/launcher/"
+}
+
+task tarDistFile(type: Tar) {
+    from "${buildDir}/deploy/"
+    archiveBaseName = project.name
+    compression Compression.GZIP
+    destinationDirectory = "${buildDir}" as File
+}
+
+task createTar(dependsOn:bootJar) {
+    doLast {
+        explodeJar.copy()
+        copyLauncherBase.copy()
+        downloadBaseLauncher()
+        downloadLauncher()
+        tarDistFile.copy()
+    }
+}
+
+bootJar {
+    mainClass.set(System.properties.get('mainClass'))
+}
