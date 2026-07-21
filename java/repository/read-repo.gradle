@@ -3,12 +3,14 @@ repositories {
         name = "nexus-biva-libs"
         url = findProperty('bivaLibsUrl') ?: System.getenv('BIVA_LIBS_URL') ?: ''
         allowInsecureProtocol = true
-        credentials {
-            username = findProperty('bivaUser') ?: System.getenv('BIVA_NEXUS_USER') ?: ''
-            password = findProperty('bivaPassword') ?: System.getenv('BIVA_NEXUS_PASSWORD') ?: ''
+        credentials(HttpHeaderCredentials) {
+            def user = findProperty('bivaUser') ?: System.getenv('BIVA_NEXUS_USER') ?: ''
+            def pass = findProperty('bivaPassword') ?: System.getenv('BIVA_NEXUS_PASSWORD') ?: ''
+            name = "Authorization"
+            value = "Basic " + "${user}:${pass}".bytes.encodeBase64().toString()
         }
         authentication {
-            basic(BasicAuthentication)
+            header(HttpHeaderAuthentication)
         }
     }
     mavenCentral()
