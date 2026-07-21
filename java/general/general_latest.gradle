@@ -55,6 +55,5 @@ sonarqube {
             ?: System.getenv('SONAR_ORGANIZATION')
             ?: "biva-mx"
         property "sonar.gradle.skipCompile", "true"
-        property "sonar.qualitygate.wait", "true"
     }
 }
