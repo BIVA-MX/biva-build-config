@@ -40,8 +40,8 @@ jobs:
 
       - name: Login to Nexus Docker Registry
         run: |
-          echo "${{ secrets.NEXUS_PASSWORD }}" | \
-            docker login host.docker.internal:8082 -u "${{ secrets.NEXUS_USER }}" --password-stdin
+          echo "$BIVA_NEXUS_PASSWORD" | \
+            docker login host.docker.internal:8082 -u "$BIVA_NEXUS_USER" --password-stdin
 
       - name: Build, Test & Sonar
         run: |
@@ -53,10 +53,7 @@ jobs:
             -v "/tmp/runner-work/.gradle:/tmp/gradle-home" \
             -w /workspace \
             -e GRADLE_USER_HOME=/tmp/gradle-home \
-            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
-            -e BIVA_NEXUS_USER="${{ secrets.NEXUS_USER }}" \
-            -e BIVA_NEXUS_PASSWORD="${{ secrets.NEXUS_PASSWORD }}" \
-            -e BIVA_LIBS_URL="http://192.168.3.35:8081/repository/biva-libs/" \
+            --env-file /opt/biva-infrastructure/secrets.env \
             host.docker.internal:8082/biva-java21-gradle85:latest \
             gradle clean build test \
               jacocoTestReport \
@@ -151,8 +148,8 @@ jobs:
 
       - name: Login to Nexus Docker Registry
         run: |
-          echo "${{ secrets.NEXUS_PASSWORD }}" | \
-            docker login host.docker.internal:8082 -u "${{ secrets.NEXUS_USER }}" --password-stdin
+          echo "$BIVA_NEXUS_PASSWORD" | \
+            docker login host.docker.internal:8082 -u "$BIVA_NEXUS_USER" --password-stdin
 
       - name: Read projectType
         id: meta
@@ -173,9 +170,7 @@ jobs:
             -v "/tmp/runner-work/.gradle:/tmp/gradle-home" \
             -w /workspace \
             -e GRADLE_USER_HOME=/tmp/gradle-home \
-            -e BIVA_NEXUS_USER="${{ secrets.NEXUS_USER }}" \
-            -e BIVA_NEXUS_PASSWORD="${{ secrets.NEXUS_PASSWORD }}" \
-            -e BIVA_LIBS_URL="http://192.168.3.35:8081/repository/biva-libs/" \
+            --env-file /opt/biva-infrastructure/secrets.env \
             host.docker.internal:8082/biva-java21-gradle85:latest \
             gradle clean compileJava createTar
 
@@ -199,11 +194,6 @@ jobs:
             -v "/tmp/runner-work/.gradle:/tmp/gradle-home" \
             -w /workspace \
             -e GRADLE_USER_HOME=/tmp/gradle-home \
-            -e BIVA_NEXUS_USER="${{ secrets.NEXUS_USER }}" \
-            -e BIVA_NEXUS_PASSWORD="${{ secrets.NEXUS_PASSWORD }}" \
-            -e BIVA_LIBS_URL="http://192.168.3.35:8081/repository/biva-libs/" \
-            -e BIVA_NEXUS_PUBLISHER_USER="${{ secrets.NEXUS_PUBLISHER_USER }}" \
-            -e BIVA_NEXUS_PUBLISHER_PASSWORD="${{ secrets.NEXUS_PUBLISHER_PASSWORD }}" \
-            -e BIVA_LIBS_PUBLISH_URL="http://192.168.3.35:8081/repository/biva-libs/" \
+            --env-file /opt/biva-infrastructure/secrets.env \
             host.docker.internal:8082/biva-java21-gradle85:latest \
             gradle publish
