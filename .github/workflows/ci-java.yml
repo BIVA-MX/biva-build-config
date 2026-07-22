@@ -1,0 +1,164 @@
+name: CI Java (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      sonar_project_key:
+        required: true
+        type: string
+      dependency_track_project_name:
+        required: false
+        type: string
+        default: ''
+
+jobs:
+
+  build:
+    name: Build, Test & Sonar
+    runs-on: [self-hosted, linux, biva]
+
+    steps:
+      - name: Fix workspace permissions
+        run: |
+          docker run --rm \
+            -v "/tmp/runner-work:/tmp/runner-work" \
+            alpine sh -c "chown -R $(id -u):$(id -g) /tmp/runner-work 2>/dev/null || true"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: /tmp/runner-work/.gradle
+          key: gradle-${{ hashFiles('**/*.gradle', 'gradle.properties') }}
+          restore-keys: gradle-
+
+      - name: Login to Nexus Docker Registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login host.docker.internal:8082 -u "${{ secrets.NEXUS_USER }}" --password-stdin
+
+      - name: Build, Test & Sonar
+        run: |
+          mkdir -p /tmp/runner-work/.gradle
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --add-host=host.docker.internal:host-gateway \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "/tmp/runner-work/.gradle:/tmp/gradle-home" \
+            -w /workspace \
+            -e GRADLE_USER_HOME=/tmp/gradle-home \
+            -e SONAR_TOKEN="${{ secrets.SONAR_TOKEN }}" \
+            -e BIVA_NEXUS_USER="${{ secrets.NEXUS_USER }}" \
+            -e BIVA_NEXUS_PASSWORD="${{ secrets.NEXUS_PASSWORD }}" \
+            -e BIVA_LIBS_URL="http://192.168.3.35:8081/repository/biva-libs/" \
+            host.docker.internal:8082/biva-java21-gradle85:latest \
+            gradle clean build test \
+              jacocoTestReport \
+              jacocoTestCoverageVerification \
+              sonar \
+              -Dsonar.host.url=http://192.168.3.35:9000 \
+              -Dsonar.projectKey="${{ inputs.sonar_project_key }}"
+
+  dependency-track:
+    name: Dependency Vulnerability Scan
+    runs-on: [self-hosted, linux, biva]
+
+    steps:
+      - name: Fix workspace permissions
+        run: |
+          docker run --rm \
+            -v "/tmp/runner-work:/tmp/runner-work" \
+            alpine sh -c "chown -R $(id -u):$(id -g) /tmp/runner-work 2>/dev/null || true"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: /tmp/runner-work/.gradle
+          key: gradle-${{ hashFiles('**/*.gradle', 'gradle.properties') }}
+          restore-keys: gradle-
+
+      - name: Login to Nexus Docker Registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login host.docker.internal:8082 -u "${{ secrets.NEXUS_USER }}" --password-stdin
+
+      - name: Generate BOM
+        run: |
+          mkdir -p /tmp/runner-work/.gradle
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --add-host=host.docker.internal:host-gateway \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -v "/tmp/runner-work/.gradle:/tmp/gradle-home" \
+            -w /workspace \
+            -e GRADLE_USER_HOME=/tmp/gradle-home \
+            -e BIVA_NEXUS_USER="${{ secrets.NEXUS_USER }}" \
+            -e BIVA_NEXUS_PASSWORD="${{ secrets.NEXUS_PASSWORD }}" \
+            -e BIVA_LIBS_URL="http://192.168.3.35:8081/repository/biva-libs/" \
+            host.docker.internal:8082/biva-java21-gradle85:latest \
+            gradle cyclonedxBom
+
+      - name: Upload BOM to Dependency Track
+        run: |
+          DT_PROJECT="${{ inputs.dependency_track_project_name || inputs.sonar_project_key }}"
+
+          TOKEN=$(curl -s --fail \
+            -X POST "${{ secrets.DEPENDENCY_TRACK_URL }}/api/v1/bom" \
+            -H "X-API-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
+            -F "autoCreate=true" \
+            -F "projectName=${DT_PROJECT}" \
+            -F "projectVersion=${{ github.ref_name }}" \
+            -F "bom=@$GITHUB_WORKSPACE/build/reports/application.cdx.json" \
+            | jq -r '.token')
+
+          echo "BOM token: $TOKEN"
+
+          for i in $(seq 1 30); do
+            PROCESSING=$(curl -s \
+              -H "X-API-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
+              "${{ secrets.DEPENDENCY_TRACK_URL }}/api/v1/bom/token/$TOKEN" \
+              | jq -r '.processing')
+
+            if [ "$PROCESSING" = "false" ]; then
+              echo "BOM procesado correctamente"
+              break
+            fi
+
+            if [ "$i" = "30" ]; then
+              echo "Timeout: Dependency Track tardó demasiado en procesar el BOM"
+              exit 1
+            fi
+
+            echo "Procesando... ($i/30)"
+            sleep 10
+          done
+
+          PROJECT_UUID=$(curl -s \
+            -H "X-API-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
+            "${{ secrets.DEPENDENCY_TRACK_URL }}/api/v1/project/lookup?name=${DT_PROJECT}&version=${{ github.ref_name }}" \
+            | jq -r '.uuid')
+
+          echo "Project UUID: $PROJECT_UUID"
+
+          METRICS=$(curl -s \
+            -H "X-API-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
+            "${{ secrets.DEPENDENCY_TRACK_URL }}/api/v1/metrics/project/$PROJECT_UUID/current")
+
+          CRITICAL=$(echo $METRICS | jq -r '.critical // 0')
+          HIGH=$(echo $METRICS | jq -r '.high // 0')
+          MEDIUM=$(echo $METRICS | jq -r '.medium // 0')
+
+          echo "Vulnerabilidades — Critical: $CRITICAL | High: $HIGH | Medium: $MEDIUM"
+
+          TOTAL=$((CRITICAL + HIGH + MEDIUM))
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "CI fallido: $CRITICAL críticas, $HIGH altas, $MEDIUM medias (umbral: CVSS >= 4)"
+            exit 1
+          fi
+
+          echo "Sin vulnerabilidades con CVSS >= 4"
