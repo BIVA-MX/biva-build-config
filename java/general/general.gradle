@@ -1,6 +1,6 @@
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -45,7 +45,7 @@ cyclonedxBom {
 
 pmd {
     consoleOutput = false
-    toolVersion = "7.0.0-rc4"
+    toolVersion = "7.17.0"
 }
 
 javadoc {
