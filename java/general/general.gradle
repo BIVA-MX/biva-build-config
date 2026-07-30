@@ -45,7 +45,7 @@ cyclonedxBom {
 
 pmd {
     consoleOutput = false
-    toolVersion = "7.5.0"
+    toolVersion = "7.17.0"
 }
 
 javadoc {
