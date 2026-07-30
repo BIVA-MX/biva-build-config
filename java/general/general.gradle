@@ -21,10 +21,8 @@ testing {
     suites {
         test {
             useJUnitJupiter()
-            testType = TestSuiteType.UNIT_TEST
         }
         integrationTest(JvmTestSuite) {
-            testType = TestSuiteType.INTEGRATION_TEST
             dependencies {
                 implementation project()
             }
