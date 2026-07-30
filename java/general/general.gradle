@@ -1,3 +1,9 @@
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 jar {
     manifest {
         attributes "Implementation-Title": project.name,
