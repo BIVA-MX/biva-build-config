@@ -5,6 +5,7 @@ java {
 }
 
 jar {
+    archiveClassifier.set('')
     manifest {
         attributes "Implementation-Title": project.name,
                 'Implementation-Version': project.version,
