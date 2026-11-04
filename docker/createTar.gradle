@@ -1,0 +1,197 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
+def getSystemProperty(propertyName, elseValue ){
+    String propStr = System.getProperty(propertyName)
+    if( propStr != null  ){
+        return propStr
+    }
+    return elseValue
+}
+
+def loadConfiguration() {
+  def profileName = getSystemProperty("app", "app")
+  def configFileName = "$profileName"
+  try {
+    def configFile = file('config/' + "$configFileName" + '.groovy')
+    def config = new ConfigSlurper("conf").parse(configFile.toURI().toURL())
+    System.properties.put('config', config)
+    return config
+  } catch (Exception e) {def configFile = file('config' + "$configFileName" + '.groovy')
+    throw new InvalidUserDataException("No se ha encontrado las propiedades para la configuracion del proyecto", e)
+  }
+  
+}
+
+processResources {
+  def conf = loadConfiguration()
+  if (conf != null) {
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+        filesMatching(["**/*.yml", "**/*.yaml", "**/bin/*.sh", "**/docker/Dockerfile", "**/launcher/launcher.sh"]) {
+        filter(ReplaceTokens, tokens: properties)
+    }
+    
+  } else {
+    throw new InvalidUserDataException("No se ha encontrado las propiedades para la configuracion del proyecto")
+  }
+}
+
+def downloadBaseLauncher() {
+    download.run {
+        src([
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/cleanLogs.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/createDockerContainer.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/createDockerImage.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/createDockerInstance.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/removeDockerInstance.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/remove.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/setEnv.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/shutdown.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/start.sh',
+            'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/bin/status.sh'
+        ])
+        dest "${buildDir}/resources/main/bin"
+    }
+    copyLauncherBase.copy()
+}
+
+def downloadDockerfile() {
+    download.run {
+        src 'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/docker/Dockerfile'
+        dest "${buildDir}/resources/main/docker/Dockerfile"
+    }
+    copyDockerFileDownloaded.copy()
+}
+
+def downloadLauncher() {
+    download.run {
+        src 'https://raw.githubusercontent.com/BIVA-MX/biva-build-config/main/docker/scripts/launcher/launcher.sh'
+        dest "${buildDir}/resources/main/launcher/launcher.sh"
+    }
+    copyLaunchers.copy()
+}
+
+task copyDockerFileDownloaded(type: Copy) {
+    from "${buildDir}/resources/main/docker"
+    into "${buildDir}/deploy/${version}/docker"
+    def conf = loadConfiguration()
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)
+        }
+      }
+    }
+    // Gradle 9 removio archivesBaseName del project.properties iterable.
+    // El Dockerfile usa @archivesBaseName@ para construir el nombre del JAR,
+    // asi que hay que inyectarlo explicitamente desde base.archivesName.
+    if (GradleVersion.current() >= GradleVersion.version("8.4")) {
+        properties.put('archivesBaseName', base.archivesName.get())
+    }
+    filter(ReplaceTokens, tokens: properties)
+}
+
+task copyLauncherBase(type:Copy) {
+    from "${buildDir}/resources/main/bin"
+    into "${buildDir}/deploy/${version}/bin"
+    if (GradleVersion.current() >= GradleVersion.version("8.3")) {
+      filePermissions { unix(0755) }
+    } else {
+      fileMode = 0755
+    }
+    def conf = loadConfiguration()
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+    filter(ReplaceTokens, tokens: properties)
+}
+
+task copyLaunchers(type:Copy) {
+    from "${buildDir}/resources/main/launcher"
+    into "${buildDir}/deploy"
+    if (GradleVersion.current() >= GradleVersion.version("8.3")) {
+      filePermissions { unix(0755) }
+    } else {
+      fileMode = 0755
+    }
+    def conf = loadConfiguration()
+    def properties = conf.flatten()
+    def profileName = getSystemProperty("app", "app")
+    project.ext.set('version', version)
+    project.ext.set('appIncludeDataFiles', 'false')
+    System.setProperty('appIncludeDataFiles', 'false')
+    project.properties.each {k, v ->
+      if (k != null && v != null) {
+        if (v != null && v instanceof java.lang.String) {
+			properties.put(k, v)        
+        }
+      }
+    }
+    filter(ReplaceTokens, tokens: properties)
+}
+
+task explodeJar(type: Copy) {
+    // Gradle 9 removio el property project.archivesBaseName.
+    // Usar base.archivesName.get() es compatible con Gradle 7.0+ (incluye 8.x y 9.x).
+    def baseName = (GradleVersion.current() >= GradleVersion.version("8.4")) ? base.archivesName.get() : project.archivesBaseName
+    def jarFile = file("${buildDir}/libs/${baseName}-${version}.jar")
+    def outputDir = file("${buildDir}/deploy/${version}/docker")
+
+    from jarFile
+    into outputDir
+}
+
+task tarDistFile(type: Tar) {
+    from "${buildDir}/deploy/"
+    archiveBaseName = project.name
+    compression Compression.GZIP
+    destinationDirectory = "${buildDir}" as File
+
+    // Tar usa sus propios defaults (0644 archivos, 0755 dirs) y no hereda los
+    // permisos del filesystem. Marcar los .sh como ejecutables para que al
+    // descomprimir el TAR en el servidor se puedan correr sin chmod manual.
+    eachFile { details ->
+        if (details.name.endsWith('.sh')) {
+            if (GradleVersion.current() >= GradleVersion.version("8.3")) {
+                details.permissions { unix(0755) }
+            } else {
+                details.mode = 0755
+            }
+        }
+    }
+}
+
+
+task createTar(dependsOn:bootJar) {
+    doLast {
+        downloadDockerfile()
+        explodeJar.copy()
+        downloadBaseLauncher()
+        downloadLauncher()
+        tarDistFile.copy()
+    }
+}
